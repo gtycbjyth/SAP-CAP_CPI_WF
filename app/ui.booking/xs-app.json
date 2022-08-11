@@ -15,8 +15,8 @@
       "destination": "ui5"
     },
     {
-        "source": "^/library/(.*)$",
-        "target": "/library/$1",
+        "source": "^/booking/(.*)$",
+        "target": "/booking/$1",
         "destination": "route_for_launchpad",
         "authenticationType": "xsuaa",
         "csrfProtection": false
