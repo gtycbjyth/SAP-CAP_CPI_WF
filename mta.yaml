@@ -3,130 +3,154 @@ ID: booking-project
 description: A simple CAP project.
 version: 1.0.0
 modules:
-  - name: booking-project-srv
-    type: nodejs
-    path: gen/srv
-    provides:
-      - name: srv-api
-        properties:
-          srv-url: ${default-url}
+- name: booking-project-srv
+  type: nodejs
+  path: gen/srv
+  requires:
+  - name: booking-project-db
+  - name: uaa_booking-project
+  provides:
+  - name: srv-api
+    properties:
+      srv-url: ${default-url}
+  parameters:
+    buildpack: nodejs_buildpack
+  build-parameters:
+    builder: npm-ci
+- name: booking-project-destination-content
+  type: com.sap.application.content
+  requires:
+  - name: booking-project-destination-service
     parameters:
-      buildpack: nodejs_buildpack
-    build-parameters:
-      builder: npm-ci
-    requires:
-      - name: booking-project-db
-  - name: booking-project-destination-content
-    type: com.sap.application.content
-    requires:
-      - name: booking-project-destination-service
-        parameters:
-          content-target: true
-      - name: booking-project_html_repo_host
-        parameters:
-          service-key:
-            name: booking-project_html_repo_host-key
-      - name: uaa_booking-project
-        parameters:
-          service-key:
-            name: uaa_booking-project-key
-      - name: srv-api
+      content-target: true
+  - name: booking-project_html_repo_host
     parameters:
-      content:
+      service-key:
+        name: booking-project_html_repo_host-key
+  - name: uaa_booking-project
+    parameters:
+      service-key:
+        name: uaa_booking-project-key
+  - name: srv-api
+  parameters:
+    content:
+      instance:
+        destinations:
+        - Authentication: OAuth2UserTokenExchange
+          Name: route_for_launchpad
+          ServiceInstanceName: booking-project-xsuaa-service
+          ServiceKeyName: uaa_booking-project-key
+          URL: ~{srv-api/srv-url}
+          sap.cloud.service: router
+        - Name: router_booking_project_html_repo_host
+          ServiceInstanceName: booking-project-html5-app-host-service
+          ServiceKeyName: booking-project_html_repo_host-key
+          sap.cloud.service: router
+        - Authentication: OAuth2UserTokenExchange
+          Name: router_uaa_booking_project
+          ServiceInstanceName: booking-project-xsuaa-service
+          ServiceKeyName: uaa_booking-project-key
+          sap.cloud.service: router
+        existing_destinations_policy: ignore
+  build-parameters:
+    no-source: true
+- name: booking-project-app-content
+  type: com.sap.application.content
+  path: .
+  requires:
+  - name: booking-project_html_repo_host
+    parameters:
+      content-target: true
+  build-parameters:
+    build-result: resources
+    requires:
+    - artifacts:
+      - nsuibooking.zip
+      name: nsuibooking
+      target-path: resources/
+- name: nsuibooking
+  type: html5
+  path: app/ui.booking
+  build-parameters:
+    build-result: dist
+    builder: custom
+    commands:
+    - npm install
+    - npm run build:cf
+    supported-platforms: []
+- name: booking-project-db-deployer
+  type: hdb
+  path: gen/db
+  requires:
+  - name: booking-project-db
+  parameters:
+    buildpack: nodejs_buildpack
+- name: booking-project
+  type: approuter.nodejs
+  path: app/
+  requires:
+  - name: srv-api
+    group: destinations
+    properties:
+      forwardAuthToken: true
+      name: srv-api
+      url: ~{srv-url}
+  - name: uaa_booking-project
+  - name: booking-project-destination-service
+    group: destinations
+    properties:
+      forwardAuthToken: false
+      name: ui5
+      url: https://ui5.sap.com
+  parameters:
+    disk-quota: 256M
+    keep-existing-routes: true
+    memory: 256M
+resources:
+- name: booking-project-destination-service
+  type: org.cloudfoundry.managed-service
+  parameters:
+    config:
+      HTML5Runtime_enabled: true
+      init_data:
         instance:
           destinations:
-            - Authentication: OAuth2UserTokenExchange
-              Name: route_for_launchpad
-              ServiceInstanceName: booking-project-xsuaa-service
-              ServiceKeyName: uaa_booking-project-key
-              URL: ~{srv-api/srv-url}
-              sap.cloud.service: router
-            - Name: router_booking_project_html_repo_host
-              ServiceInstanceName: booking-project-html5-app-host-service
-              ServiceKeyName: booking-project_html_repo_host-key
-              sap.cloud.service: router
-            - Authentication: OAuth2UserTokenExchange
-              Name: router_uaa_booking_project
-              ServiceInstanceName: booking-project-xsuaa-service
-              ServiceKeyName: uaa_booking-project-key
-              sap.cloud.service: router
-          existing_destinations_policy: ignore
-    build-parameters:
-      no-source: true
-  - name: booking-project-app-content
-    type: com.sap.application.content
-    path: .
-    requires:
-      - name: booking-project_html_repo_host
-        parameters:
-          content-target: true
-    build-parameters:
-      build-result: resources
-      requires:
-        - artifacts:
-            - nsuibooking.zip
-          name: nsuibooking
-          target-path: resources/
-  - name: nsuibooking
-    type: html5
-    path: app/ui.booking
-    build-parameters:
-      build-result: dist
-      builder: custom
-      commands:
-        - npm install
-        - npm run build:cf
-      supported-platforms: []
-
-  - name: booking-project-db-deployer
-    type: hdb
-    path: gen/db
-    parameters:
-      buildpack: nodejs_buildpack
-    requires:
-      - name: booking-project-db
-resources:
-  - name: booking-project-destination-service
-    type: org.cloudfoundry.managed-service
-    parameters:
-      config:
-        HTML5Runtime_enabled: true
-        init_data:
-          instance:
-            destinations:
-              - Authentication: NoAuthentication
-                Name: ui5
-                ProxyType: Internet
-                Type: HTTP
-                URL: https://ui5.sap.com
-            existing_destinations_policy: update
-        version: 1.0.0
-      service: destination
-      service-name: booking-project-destination-service
-      service-plan: lite
-  - name: booking-project_html_repo_host
-    type: org.cloudfoundry.managed-service
-    parameters:
-      service: html5-apps-repo
-      service-name: booking-project-html5-app-host-service
-      service-plan: app-host
-  - name: uaa_booking-project
-    type: org.cloudfoundry.managed-service
-    parameters:
-      path: ./xs-security.json
-      service: xsuaa
-      service-name: booking-project-xsuaa-service
-      service-plan: application
-  - name: booking-project-db
-    type: com.sap.xs.hdi-container
-    parameters:
-      service: hana
-      service-plan: hdi-shared
+          - Authentication: NoAuthentication
+            Name: ui5
+            ProxyType: Internet
+            Type: HTTP
+            URL: https://ui5.sap.com
+          existing_destinations_policy: update
+      version: 1.0.0
+    service: destination
+    service-name: booking-project-destination-service
+    service-plan: lite
+- name: booking-project_html_repo_host
+  type: org.cloudfoundry.managed-service
+  parameters:
+    service: html5-apps-repo
+    service-name: booking-project-html5-app-host-service
+    service-plan: app-host
+- name: uaa_booking-project
+  type: org.cloudfoundry.managed-service
+  parameters:
+    config:
+      tenant-mode: dedicated
+      xsappname: booking-project-${org}-${space}
+    path: ./xs-security.json
+    service: xsuaa
+    service-name: booking-project-xsuaa-service
+    service-plan: application
+- name: booking-project-db
+  type: com.sap.xs.hdi-container
+  parameters:
+    service: hana
+    service-plan: hdi-shared
 parameters:
   deploy_mode: html5-repo
   enable-parallel-deployments: true
 build-parameters:
   before-all:
-    - builder: custom
-      commands:
-        - npx -p @sap/cds-dk cds build --production
+  - builder: custom
+    commands:
+    - npx -p @sap/cds-dk cds build --production

@@ -1,0 +1,11 @@
+###
+POST http://localhost:4004/booking/Booking
+Content-Type: application/json
+
+{
+    "bookId": "HTTPString", 
+    "authorId": "HTTPCPIString", 
+    "orderID": "HTTPCPIString" 
+}
+
+###
